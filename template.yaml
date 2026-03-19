@@ -89,7 +89,6 @@ spec:
       name: Publish
       action: publish:github
       input:
-        allowedHosts: ['github.com']
         description: ${{ parameters.service_name }} FastAPI service
         repoUrl: ${{ parameters.repo_url }}
 
