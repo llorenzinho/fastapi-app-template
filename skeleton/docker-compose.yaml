@@ -1,0 +1,81 @@
+services:
+{% if values.enable_postgres %}
+  postgres:
+    container_name: postgres
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+{% endif %}
+
+{% if values.enable_redis %}
+  redis:
+    container_name: redis
+    image: redis:8-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+{% endif %}
+
+  api:
+    build:
+      context: .
+      dockerfile: devops/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+{% if values.enable_postgres %}
+      APP_DB__USER: postgres
+      APP_DB__PASSWORD: postgres
+      APP_DB__HOST: postgres
+      APP_DB__PORT: 5432
+      APP_DB__DB: app
+      APP_DB__ECHO_SQL: "false"
+{% endif %}
+      APP_SERVER__HOST: "0.0.0.0"
+      APP_SERVER__PORT: 3000
+      APP_LOG__LEVEL: DEBUG
+      APP_JWT__VERIFY_KEY: fake
+{% if values.enable_redis %}
+      APP_REDIS__HOST: redis
+      APP_REDIS__PORT: 6379
+{% endif %}
+{% if values.enable_postgres or values.enable_redis %}
+    depends_on:
+{% if values.enable_postgres %}
+      postgres:
+        condition: service_healthy
+{% endif %}
+{% if values.enable_redis %}
+      redis:
+        condition: service_healthy
+{% endif %}
+{% endif %}
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+        - action: rebuild
+          path: pyproject.toml
+        - action: rebuild
+          path: poetry.lock
+
+{% if values.enable_postgres %}
+volumes:
+  postgres-data:
+{% endif %}

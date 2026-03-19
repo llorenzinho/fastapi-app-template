@@ -1,0 +1,109 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: fastapi-service
+  title: FastAPI Service Template
+  description: Creates a new FastAPI microservice with optional PostgreSQL and Redis support.
+  tags:
+    - python
+    - fastapi
+    - backend
+
+spec:
+  owner: platform-team
+  type: service
+
+  parameters:
+    - title: Service Configuration
+      required:
+        - service_name
+      properties:
+        service_name:
+          title: Service Name
+          type: string
+          description: Name of the service in kebab-case (e.g. my-service)
+          pattern: '^[a-z][a-z0-9-]*[a-z0-9]$'
+          ui:autofocus: true
+
+        enable_postgres:
+          title: Enable PostgreSQL
+          type: boolean
+          default: true
+          description: Include PostgreSQL support (SQLModel, connection pooling)
+
+        enable_redis:
+          title: Enable Redis
+          type: boolean
+          default: true
+          description: Include Redis support (caching decorators, CacheService)
+
+    - title: Repository
+      required:
+        - repo_url
+      properties:
+        repo_url:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - github.com
+
+  steps:
+    - id: fetch-base
+      name: Fetch Base Template
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          service_name: ${{ parameters.service_name }}
+          module_name: ${{ parameters.service_name | replace("-", "_") }}
+          enable_postgres: ${{ parameters.enable_postgres }}
+          enable_redis: ${{ parameters.enable_redis }}
+
+    - id: fetch-postgres
+      name: Fetch PostgreSQL Files
+      if: ${{ parameters.enable_postgres }}
+      action: fetch:template
+      input:
+        url: ./skeleton-postgres
+        values:
+          service_name: ${{ parameters.service_name }}
+          module_name: ${{ parameters.service_name | replace("-", "_") }}
+          enable_postgres: ${{ parameters.enable_postgres }}
+          enable_redis: ${{ parameters.enable_redis }}
+
+    - id: fetch-redis
+      name: Fetch Redis Files
+      if: ${{ parameters.enable_redis }}
+      action: fetch:template
+      input:
+        url: ./skeleton-redis
+        values:
+          service_name: ${{ parameters.service_name }}
+          module_name: ${{ parameters.service_name | replace("-", "_") }}
+          enable_postgres: ${{ parameters.enable_postgres }}
+          enable_redis: ${{ parameters.enable_redis }}
+
+    - id: publish
+      name: Publish
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        description: ${{ parameters.service_name }} FastAPI service
+        repoUrl: ${{ parameters.repo_url }}
+
+    - id: register
+      name: Register in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: Open in catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}
