@@ -1,0 +1,65 @@
+services:
+  postgres:
+    container_name: postgres
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    container_name: redis
+    image: redis:8-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: devops/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      APP_DB__USER: postgres
+      APP_DB__PASSWORD: postgres
+      APP_DB__HOST: postgres
+      APP_DB__PORT: 5432
+      APP_DB__DB: app
+      APP_DB__ECHO_SQL: "false"
+      APP_SERVER__HOST: "0.0.0.0"
+      APP_SERVER__PORT: 3000
+      APP_LOG__LEVEL: DEBUG
+      APP_JWT__VERIFY_KEY: fake
+      APP_REDIS__HOST: redis
+      APP_REDIS__PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+        - action: rebuild
+          path: pyproject.toml
+        - action: rebuild
+          path: poetry.lock
+
+volumes:
+  postgres-data:
